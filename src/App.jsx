@@ -135,10 +135,8 @@ export default function App() {
 
     try {
       const params = new URLSearchParams()
-      params.set("limit", "50000")
 
-      const response = await fetch(`${API_URL}/api/flights?${params.toString()}`)
-
+      const response = await fetch(`${API_URL}/api/flights`)
       if (!response.ok) {
         const text = await response.text()
         throw new Error(text || `Erro ${response.status}`)
