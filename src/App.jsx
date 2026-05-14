@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
+import L from "leaflet"
 import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from "react-leaflet"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 const ALTITUDE_STEP = 2000
+
+const CANVAS_RENDERER = L.canvas({
+  padding: 0.5,
+  tolerance: 8
+})
 
 const ALTITUDE_COLORS = [
   { altitude: 0, color: "#326ed2" },
@@ -68,7 +74,14 @@ function altitudeLabel(altitude) {
 }
 
 function groupKey(point) {
-  return `${point.aircraft}|${point.flight}|${point.origem}|${point.destino}`
+  return `${point.aircraft || "-"}|${point.flight || "-"}|${point.origem || "-"}|${point.destino || "-"}`
+}
+
+function validPoint(point) {
+  const lat = Number(point.lat)
+  const lon = Number(point.lon)
+
+  return Number.isFinite(lat) && Number.isFinite(lon)
 }
 
 function FitBounds({ points, onDone }) {
@@ -80,13 +93,16 @@ function FitBounds({ points, onDone }) {
       return
     }
 
-    const bounds = points.map((point) => [point.lat, point.lon])
-    map.fitBounds(bounds, { padding: [30, 30] })
+    const bounds = L.latLngBounds(points.map((point) => [Number(point.lat), Number(point.lon)]))
+
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30] })
+    }
 
     const timer = window.setTimeout(() => {
       map.invalidateSize()
       onDone()
-    }, 1800)
+    }, 500)
 
     return () => {
       window.clearTimeout(timer)
@@ -96,18 +112,45 @@ function FitBounds({ points, onDone }) {
   return null
 }
 
+function MapInvalidator({ points }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      map.invalidateSize()
+    }, 300)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [map, points.length])
+
+  return null
+}
+
 export default function App() {
   const [points, setPoints] = useState([])
   const [loading, setLoading] = useState(true)
   const [mapDrawing, setMapDrawing] = useState(true)
   const [error, setError] = useState("")
+  const [selectedAltitudes, setSelectedAltitudes] = useState(() => {
+    return new Set(ALTITUDE_COLORS.map((item) => item.altitude))
+  })
 
   const showLoading = loading || mapDrawing
+
+  const validPoints = useMemo(() => {
+    return points.filter(validPoint)
+  }, [points])
+
+  const visiblePoints = useMemo(() => {
+    return validPoints.filter((point) => selectedAltitudes.has(normalizeAltitude(point.altitude)))
+  }, [validPoints, selectedAltitudes])
 
   const grouped = useMemo(() => {
     const map = new Map()
 
-    for (const point of points) {
+    for (const point of visiblePoints) {
       const key = groupKey(point)
       const list = map.get(key) || []
       list.push(point)
@@ -115,18 +158,40 @@ export default function App() {
     }
 
     return Array.from(map.entries())
-  }, [points])
+  }, [visiblePoints])
 
   const altitudeGroups = useMemo(() => {
     const map = new Map()
 
-    for (const point of points) {
+    for (const point of validPoints) {
       const altitude = normalizeAltitude(point.altitude)
       map.set(altitude, (map.get(altitude) || 0) + 1)
     }
 
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0])
-  }, [points])
+  }, [validPoints])
+
+  function toggleAltitude(altitude) {
+    setSelectedAltitudes((current) => {
+      const next = new Set(current)
+
+      if (next.has(altitude)) {
+        next.delete(altitude)
+      } else {
+        next.add(altitude)
+      }
+
+      return next
+    })
+  }
+
+  function selectAllAltitudes() {
+    setSelectedAltitudes(new Set(ALTITUDE_COLORS.map((item) => item.altitude)))
+  }
+
+  function clearAllAltitudes() {
+    setSelectedAltitudes(new Set())
+  }
 
   async function loadData() {
     setLoading(true)
@@ -134,16 +199,15 @@ export default function App() {
     setError("")
 
     try {
-      const params = new URLSearchParams()
-
       const response = await fetch(`${API_URL}/api/flights`)
+
       if (!response.ok) {
         const text = await response.text()
         throw new Error(text || `Erro ${response.status}`)
       }
 
       const json = await response.json()
-      setPoints(json.data || [])
+      setPoints(Array.isArray(json.data) ? json.data : [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar dados")
       setMapDrawing(false)
@@ -162,16 +226,42 @@ export default function App() {
         <div className="legend only-legend">
           <div className="legend-title">Altitude por faixa</div>
 
+          <div className="legend-actions">
+            <button type="button" onClick={selectAllAltitudes}>
+              Marcar todas
+            </button>
+
+            <button type="button" onClick={clearAllAltitudes}>
+              Limpar
+            </button>
+          </div>
+
           {ALTITUDE_COLORS.map((item) => {
             const count = altitudeGroups.find(([altitude]) => altitude === item.altitude)?.[1] || 0
+            const checked = selectedAltitudes.has(item.altitude)
 
             return (
-              <div className="legend-row" key={item.altitude}>
+              <label className={`legend-row ${checked ? "" : "legend-row-disabled"}`} key={item.altitude}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleAltitude(item.altitude)}
+                />
+
                 <span style={{ background: item.color }} />
-                {altitudeLabel(item.altitude)} {count ? `(${count})` : ""}
-              </div>
+
+                <strong>{altitudeLabel(item.altitude)}</strong>
+
+                <small>{count ? `(${count})` : "(0)"}</small>
+              </label>
             )
           })}
+        </div>
+
+        <div className="summary-box">
+          <div>Total de pontos: {validPoints.length}</div>
+          <div>Pontos visíveis: {visiblePoints.length}</div>
+          <div>Total de rotas visíveis: {grouped.length}</div>
         </div>
 
         {error ? <div className="error">{error}</div> : null}
@@ -189,73 +279,87 @@ export default function App() {
           </div>
         ) : null}
 
-        <MapContainer center={[-14.235, -51.9253]} zoom={4} className="map" zoomControl>
+        <MapContainer
+          center={[-14.235, -51.9253]}
+          zoom={4}
+          className="map"
+          zoomControl
+          preferCanvas
+          renderer={CANVAS_RENDERER}
+        >
           <TileLayer
             attribution='&copy; OpenStreetMap contributors &copy; CARTO'
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           />
 
-          <FitBounds points={points} onDone={() => setMapDrawing(false)} />
+          <MapInvalidator points={visiblePoints} />
+          <FitBounds points={visiblePoints} onDone={() => setMapDrawing(false)} />
 
           {grouped.map(([key, list]) => {
-            const positions = list.map((point) => [point.lat, point.lon])
+            const positions = list.map((point) => [Number(point.lat), Number(point.lon)])
             const first = list[0]
             const color = altitudeColor(first.altitude)
 
+            if (positions.length < 2) {
+              return null
+            }
+
             return (
-              <div key={key}>
-                {positions.length >= 2 ? (
-                  <Polyline
-                    positions={positions}
-                    pathOptions={{
-                      color,
-                      weight: 4,
-                      opacity: 0.9
-                    }}
-                  >
-                    <Tooltip sticky>
-                      {first.flight} | {first.origem} → {first.destino}
-                    </Tooltip>
-                  </Polyline>
-                ) : null}
+              <Polyline
+                key={`line-${key}`}
+                positions={positions}
+                renderer={CANVAS_RENDERER}
+                smoothFactor={2}
+                pathOptions={{
+                  color,
+                  weight: 2,
+                  opacity: 0.35,
+                  interactive: true
+                }}
+              >
+                <Tooltip sticky>
+                  {first.flight} | {first.origem} → {first.destino}
+                </Tooltip>
+              </Polyline>
+            )
+          })}
 
-                {list.map((point, index) => {
-                  const pointColor = altitudeColor(point.altitude)
+          {visiblePoints.map((point, index) => {
+            const color = altitudeColor(point.altitude)
 
-                  return (
-                    <CircleMarker
-                      key={`${key}-${index}`}
-                      center={[point.lat, point.lon]}
-                      radius={5}
-                      pathOptions={{
-                        color: pointColor,
-                        fillColor: pointColor,
-                        fillOpacity: 0.95,
-                        weight: 1
-                      }}
-                    >
-                      <Tooltip sticky>
-                        {point.flight} | {point.altitude} ft | {altitudeLabel(point.altitude)}
-                      </Tooltip>
+            return (
+              <CircleMarker
+                key={`point-${point.flight || "flight"}-${point.aircraft || "aircraft"}-${index}`}
+                center={[Number(point.lat), Number(point.lon)]}
+                radius={3}
+                renderer={CANVAS_RENDERER}
+                pathOptions={{
+                  color,
+                  fillColor: color,
+                  fillOpacity: 0.9,
+                  weight: 1,
+                  opacity: 0.9
+                }}
+              >
+                <Tooltip sticky>
+                  {point.flight} | {point.altitude} ft | {altitudeLabel(point.altitude)}
+                </Tooltip>
 
-                      <Popup>
-                        <div className="popup">
-                          <div><strong>Voo:</strong> {point.flight}</div>
-                          <div><strong>Aeronave:</strong> {point.aircraft}</div>
-                          <div><strong>Tipo:</strong> {point.aircraftType}</div>
-                          <div><strong>Origem:</strong> {point.origem}</div>
-                          <div><strong>Destino:</strong> {point.destino}</div>
-                          <div><strong>Coordenada:</strong> {point.coord}</div>
-                          <div><strong>Latitude:</strong> {point.lat.toFixed(6)}</div>
-                          <div><strong>Longitude:</strong> {point.lon.toFixed(6)}</div>
-                          <div><strong>Altitude:</strong> {point.altitude} ft</div>
-                          <div><strong>Faixa:</strong> {altitudeLabel(point.altitude)}</div>
-                        </div>
-                      </Popup>
-                    </CircleMarker>
-                  )
-                })}
-              </div>
+                <Popup>
+                  <div className="popup">
+                    <div><strong>Voo:</strong> {point.flight}</div>
+                    <div><strong>Aeronave:</strong> {point.aircraft}</div>
+                    <div><strong>Tipo:</strong> {point.aircraftType}</div>
+                    <div><strong>Origem:</strong> {point.origem}</div>
+                    <div><strong>Destino:</strong> {point.destino}</div>
+                    <div><strong>Coordenada:</strong> {point.coord}</div>
+                    <div><strong>Latitude:</strong> {Number(point.lat).toFixed(6)}</div>
+                    <div><strong>Longitude:</strong> {Number(point.lon).toFixed(6)}</div>
+                    <div><strong>Altitude:</strong> {point.altitude} ft</div>
+                    <div><strong>Faixa:</strong> {altitudeLabel(point.altitude)}</div>
+                  </div>
+                </Popup>
+              </CircleMarker>
             )
           })}
         </MapContainer>

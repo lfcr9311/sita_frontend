@@ -16,69 +16,23 @@ body,
   height: 100vh;
   display: flex;
   background: #0f172a;
+  overflow: hidden;
 }
 
 .sidebar {
-  width: 240px;
+  width: 340px;
   height: 100vh;
   background: #ffffff;
   border-right: 1px solid #cbd5e1;
   padding: 18px;
-  display: flex;
-  flex-direction: column;
-  z-index: 1000;
-}
-
-.legend {
-  border-top: 0;
-  padding-top: 0;
-  overflow: auto;
-  max-height: calc(100vh - 36px);
-}
-
-.legend-title {
-  font-weight: 800;
-  color: #0f172a;
-  margin-bottom: 12px;
-  font-size: 16px;
-}
-
-.legend-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #334155;
-  font-size: 13px;
-  margin-bottom: 7px;
-  white-space: nowrap;
-}
-
-.legend-row span {
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
-  border-radius: 50%;
-  display: inline-block;
-  border: 1px solid #cbd5e1;
-}
-
-.error {
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-  padding: 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  max-height: 180px;
-  overflow: auto;
-  margin-top: 12px;
+  overflow-y: auto;
+  z-index: 20;
 }
 
 .map-area {
+  position: relative;
   flex: 1;
   height: 100vh;
-  position: relative;
 }
 
 .map {
@@ -86,50 +40,154 @@ body,
   height: 100%;
 }
 
-.popup {
-  min-width: 220px;
+.legend {
+  width: 100%;
+}
+
+.only-legend {
+  margin-top: 4px;
+}
+
+.legend-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 14px;
+}
+
+.legend-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.legend-actions button {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.legend-actions button:hover {
+  background: #e2e8f0;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-size: 13px;
-  line-height: 1.5;
+  color: #1e293b;
+  margin-bottom: 8px;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+}
+
+.legend-row input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.legend-row span {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  border-radius: 4px;
+  border: 1px solid #94a3b8;
+  flex-shrink: 0;
+}
+
+.legend-row strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.legend-row small {
+  font-size: 12px;
+  color: #64748b;
+  margin-left: auto;
+}
+
+.legend-row-disabled {
+  opacity: 0.38;
+}
+
+.summary-box {
+  margin-top: 18px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #0f172a;
+  line-height: 1.6;
+}
+
+.error {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.4;
+  border: 1px solid #fecaca;
 }
 
 .loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  z-index: 2000;
+  z-index: 999;
+  background: rgba(15, 23, 42, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: all;
 }
 
 .loading-card {
-  width: 210px;
-  height: 160px;
+  min-width: 220px;
+  padding: 22px 26px;
+  border-radius: 14px;
   background: #ffffff;
-  border-radius: 18px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.32);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 14px;
 }
 
 .loading-spinner {
-  width: 58px;
-  height: 58px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  border: 6px solid #e2e8f0;
-  border-top-color: #0f172a;
+  border: 5px solid #cbd5e1;
+  border-top-color: #2563eb;
   animation: spin 0.8s linear infinite;
 }
 
 .loading-text {
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   color: #0f172a;
+}
+
+.popup {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #0f172a;
+}
+
+.leaflet-container {
+  background: #dbeafe;
 }
 
 @keyframes spin {
